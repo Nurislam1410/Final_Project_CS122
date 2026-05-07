@@ -1,7 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
-import io
 import os
 import re
 import glob
@@ -36,11 +35,15 @@ def scrape_web_catalog():
     soup = BeautifulSoup(response.text, "html.parser")
     
     web_resources = []
+    seen_urls = set()
     for a in soup.find_all("a", href=True):
         href = urljoin(CCRS_PAGE_URL, a["href"])
         text = a.get_text(strip=True).lower()
     
         if ".csv" in href.lower() and any(k in href.lower() for k in ["crashes", "parties"]):
+            if href in seen_urls:
+                continue
+            seen_urls.add(href)
             match = re.search(r"20\d{2}", f"{text} {href}")
             year = match.group(0) if match else "Unknown"
             file_type = "crashes" if "crashes" in href.lower() else "parties"
@@ -59,20 +62,26 @@ def process_and_save(url, filename):
     ensure_directories()
     dest_path = os.path.join(RAW_DATA_DIR, filename)
     
-    existing = glob.glob(dest_path)
-    if existing:
+    if os.path.exists(dest_path):
         print(f"File {filename} already exists. Loading local copy.")
         return dest_path
 
     print(f"Downloading new data: {filename}")
-    resp = requests.get(url, headers=HEADERS)
-    
-    raw_data = io.StringIO(resp.text)
-    df = pd.read_csv(raw_data, low_memory=False)
-    
 
-    df.columns = df.columns.str.strip() 
+    # stream download in chunks to avoid loading entire file into memory
+    temp_path = dest_path + ".tmp"
+    with requests.get(url, headers=HEADERS, stream=True) as resp:
+        resp.raise_for_status()
+        with open(temp_path, 'wb') as f:
+            for chunk in resp.iter_content(chunk_size=1024 * 1024):  # 1MB chunks
+                if chunk:
+                    f.write(chunk)
+
+    # read, filter to essential columns only, then save clean version
+    df = pd.read_csv(temp_path, low_memory=False)
+    df.columns = df.columns.str.strip()
     df = df[[c for c in ESSENTIAL_COLUMNS if c in df.columns]]
-    
     df.to_csv(dest_path, index=False)
+
+    os.remove(temp_path)
     return dest_path
