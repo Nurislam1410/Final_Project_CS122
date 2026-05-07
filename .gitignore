@@ -1,1 +1,30 @@
+# local / downloaded test csvs
 testing/*.csv
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+.venv/
+env/
+
+# env & secrets (if you add later)
+.env
+.env.*
+
+# Jupyter
+**/.ipynb_checkpoints/
+
+# Flask
+instance/
+
+# optional: large pulled datasets (remove if you want csvs in the repo)
+# data/raw/*.csv
+
+# optional: regenerated plots (remove if you want plots committed)
+# static/plots/*.png
